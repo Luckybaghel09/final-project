@@ -19,17 +19,15 @@ pipeline {
 
         stage('Build Image') {
             steps {
-                sh """
-                docker build -t $IMAGE_NAME:latest .
-                """
+                sh "docker build -t $IMAGE_NAME:latest ."
             }
         }
 
         stage('Docker Login') {
             steps {
-                sh """
-                echo \$DOCKERHUB_CREDENTIALS_PSW | docker login -u \$DOCKERHUB_CREDENTIALS_USR --password-stdin
-                """
+                sh '''
+                echo $DOCKERHUB_CREDENTIALS_PSW | docker login -u $DOCKERHUB_CREDENTIALS_USR --password-stdin
+                '''
             }
         }
 
@@ -41,38 +39,28 @@ pipeline {
 
         stage('Deploy Web1') {
             steps {
-                sshagent(['web-server-key']) {
-                    sh """
-                    ssh -o StrictHostKeyChecking=no ubuntu@$WEB1 '
-                    docker pull $IMAGE_NAME:latest &&
-                    docker stop website || true &&
-                    docker rm website || true &&
-                    docker run -d --name website -p 80:80 $IMAGE_NAME:latest
-                    '
-                    """
-                }
+                sh """
+                ssh -o StrictHostKeyChecking=no ubuntu@$WEB1 '
+                docker pull $IMAGE_NAME:latest &&
+                docker stop website || true &&
+                docker rm website || true &&
+                docker run -d -p 80:80 --name website $IMAGE_NAME:latest
+                '
+                """
             }
         }
 
         stage('Deploy Web2') {
             steps {
-                sshagent(['web-server-key']) {
-                    sh """
-                    ssh -o StrictHostKeyChecking=no ubuntu@$WEB2 '
-                    docker pull $IMAGE_NAME:latest &&
-                    docker stop website || true &&
-                    docker rm website || true &&
-                    docker run -d --name website -p 80:80 $IMAGE_NAME:latest
-                    '
-                    """
-                }
+                sh """
+                ssh -o StrictHostKeyChecking=no ubuntu@$WEB2 '
+                docker pull $IMAGE_NAME:latest &&
+                docker stop website || true &&
+                docker rm website || true &&
+                docker run -d -p 80:80 --name website $IMAGE_NAME:latest
+                '
+                """
             }
-        }
-    }
-
-    post {
-        always {
-            sh 'docker logout'
         }
     }
 }
