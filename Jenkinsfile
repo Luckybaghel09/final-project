@@ -3,7 +3,7 @@ pipeline {
 
     environment {
         IMAGE_NAME = "lokesh0902/final-project"
-        DOCKERHUB_CREDENTIALS = credentials('dockerhub')
+        DOCKERHUB_CREDENTIALS = credentials('jenkins')
         WEB1 = "13.232.93.59"
         WEB2 = "43.205.212.24"
     }
