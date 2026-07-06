@@ -1,66 +1,71 @@
 pipeline {
     agent any
-
+ 
     environment {
-        IMAGE_NAME = "lokesh0902/final-project"
-        DOCKERHUB_CREDENTIALS = credentials('jenkins')
-        WEB1 = "13.232.93.59"
-        WEB2 = "43.205.212.24"
+        DOCKER_IMAGE = "yourdockerhubusername/final-project"
+        IMAGE_TAG    = "${env.BUILD_NUMBER}"
+        DEPLOY_HOST  = "your.server.ip.or.hostname"
+        DEPLOY_USER  = "ubuntu"
     }
-
+ 
     stages {
-
+ 
         stage('Checkout') {
             steps {
                 git branch: 'main',
-                    url: 'https://github.com/Luckybaghel09/final-project.git'
+                    url: 'https://github.com/Luckybaghel09/final-project.git',
+                    credentialsId: 'lokesh0902'
             }
         }
-
-        stage('Build Image') {
+ 
+        stage('Build Docker Image') {
             steps {
-                sh "docker build -t $IMAGE_NAME:latest ."
+                sh "docker build -t ${DOCKER_IMAGE}:${IMAGE_TAG} -t ${DOCKER_IMAGE}:latest ."
             }
         }
-
-        stage('Docker Login') {
+ 
+        stage('Push to Docker Hub') {
             steps {
-                sh '''
-                echo $DOCKERHUB_CREDENTIALS_PSW | docker login -u $DOCKERHUB_CREDENTIALS_USR --password-stdin
-                '''
+                withCredentials([usernamePassword(
+                    credentialsId: 'dockerhub',
+                    usernameVariable: 'DOCKER_USER',
+                    passwordVariable: 'DOCKER_PASS'
+                )]) {
+                    sh """
+                        echo "\$DOCKER_PASS" | docker login -u "\$DOCKER_USER" --password-stdin
+                        docker push ${DOCKER_IMAGE}:${IMAGE_TAG}
+                        docker push ${DOCKER_IMAGE}:latest
+                    """
+                }
             }
         }
-
-        stage('Push Image') {
+ 
+        stage('Deploy to Server') {
             steps {
-                sh "docker push $IMAGE_NAME:latest"
-            }
-        }
-
-        stage('Deploy Web1') {
-            steps {
-                sh """
-                ssh -o StrictHostKeyChecking=no ubuntu@$WEB1 '
-                docker pull $IMAGE_NAME:latest &&
-                docker stop website || true &&
-                docker rm website || true &&
-                docker run -d -p 80:80 --name website $IMAGE_NAME:latest
-                '
-                """
-            }
-        }
-
-        stage('Deploy Web2') {
-            steps {
-                sh """
-                ssh -o StrictHostKeyChecking=no ubuntu@$WEB2 '
-                docker pull $IMAGE_NAME:latest &&
-                docker stop website || true &&
-                docker rm website || true &&
-                docker run -d -p 80:80 --name website $IMAGE_NAME:latest
-                '
-                """
+                sshagent(credentials: ['jenkins']) {
+                    sh """
+                        ssh -o StrictHostKeyChecking=no ${DEPLOY_USER}@${DEPLOY_HOST} '
+                            docker pull ${DOCKER_IMAGE}:latest &&
+                            docker stop final-project || true &&
+                            docker rm final-project || true &&
+                            docker run -d --name final-project -p 80:80 ${DOCKER_IMAGE}:latest
+                        '
+                    """
+                }
             }
         }
     }
+ 
+    post {
+        always {
+            sh 'docker logout || true'
+        }
+        success {
+            echo "✅ Build & Deploy successful: ${DOCKER_IMAGE}:${IMAGE_TAG}"
+        }
+        failure {
+            echo "❌ Build failed. Check console output above."
+        }
+    }
 }
+ 
